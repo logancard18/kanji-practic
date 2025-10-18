@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Japanese Kanji Flashcards — 3 Sets (Responsive)</title>
+<style>
+  :root{
+    --bg:#f7f7fb; --card:#ffffff; --accent:#2b6cb0; --muted:#666;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:#111;}
+  .app{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;}
+  .container{width:100%; max-width:900px; background:transparent;}
+  header{display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+  header h1{margin:0; font-size:18px;}
+  .controls{margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  select, button{padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:#fff; cursor:pointer;}
+  button{min-width:90px;}
+  .card-wrap{background:var(--card); border-radius:12px; padding:20px; box-shadow:0 6px 18px rgba(20,20,50,0.06);}
+  .card{
+    min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+  }
+  .card .title{font-size:14px; color:var(--muted);}
+  .kanji{font-weight:700; font-size:72px; text-align:center; word-break:break-word;}
+  .hiragana{font-size:36px; text-align:center; word-break:break-word;}
+  .meaning{font-size:20px; color:#333; text-align:center; max-width:100%; word-break:break-word;}
+  .romaji{font-size:18px; color:var(--muted); text-align:center;}
+  .nav{display:flex; gap:8px; justify-content:center; margin-top:16px; flex-wrap:wrap;}
+  .small{font-size:13px; padding:6px 10px; min-width:70px;}
+  .status{margin-top:12px; text-align:center; color:var(--muted); font-size:13px;}
+  @media (max-width:520px){
+    .kanji{font-size:48px}
+    .hiragana{font-size:26px}
+    .meaning{font-size:16px}
+  }
+  /* overlay for "End of list" */
+  .overlay{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;
+  }
+  .bubble{
+    pointer-events:auto;
+    background:rgba(255,255,255,0.98);
+    border:1px solid #ddd;
+    padding:18px 20px; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.08);
+    font-weight:600; color:#222;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="container">
+    <header>
+      <h1>Japanese Flashcards (Kanji → reveal Hiragana → Meaning → Romaji)</h1>
+      <div class="controls">
+        <label for="setSelect">Set:</label>
+        <select id="setSelect" aria-label="Select dataset">
+          <option value="set1">Set 1 (numbers, days...)</option>
+          <option value="set2">Set 2 (students, time, travel...)</option>
+          <option value="set3">Set 3 (verbs, adjectives, daily words)</option>
+        </select>
+        <button id="restartBtn" class="small">Restart</button>
+      </div>
+    </header>
+
+    <div class="card-wrap">
+      <div class="card" id="card">
+        <div class="title" id="cardTitle">Kanji</div>
+        <div class="kanji" id="kanjiField">&nbsp;</div>
+        <div class="hiragana" id="hiraganaField" style="display:none">&nbsp;</div>
+        <div class="meaning" id="meaningField" style="display:none">&nbsp;</div>
+        <div class="romaji" id="romajiField" style="display:none">&nbsp;</div>
+      </div>
+
+      <div class="nav">
+        <button id="prevBtn" class="small">Previous</button>
+        <button id="revealBtn" class="small">Reveal</button>
+        <button id="showKanjiBtn" class="small">Show Kanji</button>
+        <button id="nextBtn" class="small">Next</button>
+      </div>
+
+      <div class="status" id="statusText">Card 0 / 0</div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="overlay" style="display:none">
+  <div class="bubble" id="overlayText">End of list! Shuffling again...</div>
+</div>
+
+<script>
+/* ---------------------------
+   Data: three sets (from user)
+   Each card: {kanji, hiragana, romaji, meaning}
+   If meaning is missing, we show fallback "Kanji: <kanji>" when revealing meaning.
+   --------------------------- */
+
+/* ---------- SET 1 ---------- */
+/* curated from your earlier list (kanji, hiragana+romaji, english meaning) */
+const set1 = [
+  { kanji:"人", hiragana:"ひと", romaji:"hito", meaning:"person" },
+  { kanji:"カナダ人", hiragana:"カナダじん", romaji:"kanada jin", meaning:"Canadian person (Jin = 人)" },
+  { kanji:"三人", hiragana:"さんにん", romaji:"sannin", meaning:"three people" },
+  { kanji:"その人", hiragana:"そのひと", romaji:"sono hito", meaning:"that person" },
+  { kanji:"三日", hiragana:"みっか", romaji:"mikka", meaning:"third day / 3 days" },
+  { kanji:"一週間", hiragana:"いっしゅうかん", romaji:"isshuukan", meaning:"one week" },
+  { kanji:"日曜日", hiragana:"にちようび", romaji:"nichiyoubi", meaning:"Sunday" },
+  { kanji:"一つ", hiragana:"ひとつ", romaji:"hitotsu", meaning:"one thing" },
+  { kanji:"一人", hiragana:"ひとり", romaji:"hitori", meaning:"one person" },
+  { kanji:"一日", hiragana:"いちにち", romaji:"ichinichi", meaning:"one day" },
+  { kanji:"一日", hiragana:"ついたち", romaji:"tsuitachi", meaning:"first day of the month" },
+  { kanji:"一分", hiragana:"いっぷん", romaji:"ippun", meaning:"one minute" },
+  { kanji:"二つ", hiragana:"ふたつ", romaji:"futatsu", meaning:"two things" },
+  { kanji:"二日", hiragana:"ふつか", romaji:"futsuka", meaning:"second day / 2 days" },
+  { kanji:"二人", hiragana:"ふたり", romaji:"futari", meaning:"two people" },
+  { kanji:"二時間", hiragana:"にじかん", romaji:"nijikan", meaning:"two hours" },
+  { kanji:"三つ", hiragana:"みっつ", romaji:"mittsu", meaning:"three things" },
+  { kanji:"四つ", hiragana:"よっつ", romaji:"yottsu", meaning:"four things" },
+  { kanji:"四日", hiragana:"よっか", romaji:"yokka", meaning:"fourth day / 4 days" },
+  { kanji:"四回", hiragana:"よんかい", romaji:"yonkai", meaning:"four times" },
+  { kanji:"四人", hiragana:"よにん", romaji:"yonin", meaning:"four people" },
+  { kanji:"四月", hiragana:"しがつ", romaji:"shigatsu", meaning:"April" },
+  { kanji:"五つ", hiragana:"いつつ", romaji:"itsutsu", meaning:"five things" },
+  { kanji:"五日", hiragana:"いつか", romaji:"itsuka", meaning:"fifth day / 5 days" },
+  { kanji:"五人", hiragana:"ごにん", romaji:"gonin", meaning:"five people" },
+  { kanji:"六つ", hiragana:"むっつ", romaji:"muttsu", meaning:"six things" },
+  { kanji:"六日", hiragana:"むいか", romaji:"muika", meaning:"sixth day / 6 days" },
+  { kanji:"六人", hiragana:"ろくにん", romaji:"rokunin", meaning:"six people" },
+  { kanji:"七つ", hiragana:"ななつ", romaji:"nanatsu", meaning:"seven things" },
+  { kanji:"七日", hiragana:"なのか", romaji:"nanoka", meaning:"seventh day / 7 days" },
+  { kanji:"七分", hiragana:"ななふん", romaji:"nanafun", meaning:"seven minutes" },
+  { kanji:"七人", hiragana:"しちにん", romaji:"shichinin", meaning:"seven people" },
+  { kanji:"八つ", hiragana:"やっつ", romaji:"yattsu", meaning:"eight things" },
+  { kanji:"八日", hiragana:"ようか", romaji:"youka", meaning:"eighth day / 8 days" },
+  { kanji:"八人", hiraji:"はちにん", hiragana:"はちにん", romaji:"hachinin", meaning:"eight people" },
+  { kanji:"九つ", hiragana:"ここのつ", romaji:"kokonotsu", meaning:"nine things" },
+  { kanji:"九日", hiragana:"ここのか", romaji:"kokonoka", meaning:"ninth day / 9 days" },
+  { kanji:"九分", hiragana:"きゅうふん", romaji:"kyuufun", meaning:"nine minutes" },
+  { kanji:"九月", hiragana:"くがつ", romaji:"kugatsu", meaning:"September" },
+  { kanji:"十", hiragana:"とお", romaji:"too", meaning:"ten things" },
+  { kanji:"十日", hiragana:"とおか", romaji:"tooka", meaning:"tenth day / 10 days" },
+  { kanji:"十分", hiragana:"じゅっぷん", romaji:"juppun", meaning:"ten minutes" },
+  { kanji:"次", hiragana:"つぎ", romaji:"tsugi", meaning:"next" },
+  { kanji:"月曜日", hiragana:"げつようび", romaji:"getsuyoubi", meaning:"Monday" },
+  { kanji:"一ヶ月", hiragana:"いっかげつ", romaji:"ikkagetsu", meaning:"one month" },
+  { kanji:"日", hiragana:"ひ", romaji:"hi", meaning:"day / sun" },
+  { kanji:"火曜日", hiragana:"かようび", romaji:"kayoubi", meaning:"Tuesday" },
+  { kanji:"水", hiragana:"みず", romaji:"mizu", meaning:"water" },
+  { kanji:"水曜日", hiragana:"すいようび", romaji:"suiyoubi", meaning:"Wednesday" },
+  { kanji:"木", hiragana:"き", romaji:"ki", meaning:"tree / wood" },
+  { kanji:"木曜日", hiragana:"もくようび", romaji:"mokuyoubi", meaning:"Thursday" },
+  { kanji:"お金", hiragana:"おかね", romaji:"okane", meaning:"money" },
+  { kanji:"金", hiragana:"きん", romaji:"kin", meaning:"gold / money" },
+  { kanji:"金曜日", hiragana:"きんようび", romaji:"kinyoubi", meaning:"Friday" },
+  { kanji:"土曜日", hiragana:"どようび", romaji:"doyoubi", meaning:"Saturday" },
+  { kanji:"山", hiragana:"やま", romaji:"yama", meaning:"mountain" },
+  { kanji:"川", hiragana:"かわ", romaji:"kawa", meaning:"river" },
+  { kanji:"千円", hiragana:"せんえん", romaji:"sen'en", meaning:"1000 yen" },
+  { kanji:"三千円", hiragana:"さんぜんえん", romaji:"sanzen'en", meaning:"3000 yen" },
+  { kanji:"百円", hiragana:"ひゃくえん", romaji:"hyakuen", meaning:"100 yen" },
+  { kanji:"行きます", hiragana:"いきます", romaji:"ikimasu", meaning:"to go" },
+  { kanji:"銀行", hiragana:"ぎんこう", romaji:"ginkou", meaning:"bank" },
+  { kanji:"来ます", hiragana:"きます", romaji:"kimasu", meaning:"to come" },
+  { kanji:"来月", hiragana:"らいげつ", romaji:"raigetsu", meaning:"next month" },
+  { kanji:"休みます", hiragana:"やすみます", romaji:"yasumimasu", meaning:"to rest / take a break" },
+  { kanji:"休み", hiragana:"やすみ", romaji:"yasumi", meaning:"rest / holiday" },
+  { kanji:"見ます", hiragana:"みます", romaji:"mimasu", meaning:"to see / look" },
+  { kanji:"見せます", hiragana:"みせます", romaji:"misemasu", meaning:"to show" },
+  { kanji:"時", hiragana:"じ", romaji:"ji", meaning:"time / o’clock" },
+  { kanji:"鉛筆", hiragana:"えんぴつ", romaji:"enpitsu", meaning:"pencil" },
+  { kanji:"今日", hiragana:"きょう", romaji:"kyou", meaning:"today" },
+  { kanji:"大きい", hiragana:"おおきい", romaji:"ookii", meaning:"big" },
+  { kanji:"大学", hiragana:"だいがく", romaji:"daigaku", meaning:"university" },
+  { kanji:"大人", hiragana:"おとな", romaji:"otona", meaning:"adult" },
+  { kanji:"小さい", hiragana:"ちいさい", romaji:"chiisai", meaning:"small" },
+  { kanji:"小学校", hiragana:"しょうがっこう", romaji:"shougakkou", meaning:"elementary school" },
+  { kanji:"上", hiragana:"うえ", romaji:"ue", meaning:"up / above" },
+  { kanji:"上手", hiragana:"じょうず", romaji:"jouzu", meaning:"skillful / good at" },
+  { kanji:"下", hiragana:"した", romaji:"shita", meaning:"down / below" },
+  { kanji:"地下鉄", hiragana:"ちかてつ", romaji:"chikatetsu", meaning:"subway" },
+  { kanji:"中", hiragana:"なか", romaji:"naka", meaning:"inside / middle" },
+  { kanji:"中国", hiragana:"ちゅうごく", romaji:"chuugoku", meaning:"China" },
+  { kanji:"一日中", hiragana:"いちにちじゅう", romaji:"ichinichijuu", meaning:"all day long" },
+  { kanji:"右", hiragana:"みぎ", romaji:"migi", meaning:"right" },
+  { kanji:"左", hiragana:"ひだり", romaji:"hidari", meaning:"left" },
+  { kanji:"前", hiragana:"まえ", romaji:"mae", meaning:"front / before" },
+  { kanji:"名前", hiragana:"なまえ", romaji:"namae", meaning:"name" },
+  { kanji:"午前", hiragana:"ごぜん", romaji:"gozen", meaning:"AM / before noon" },
+  { kanji:"後ろ", hiragana:"うしろ", romaji:"ushiro", meaning:"behind" },
+  { kanji:"後", hiragana:"あと", romaji:"ato", meaning:"after / later" },
+  { kanji:"午後", hiragana:"ごご", romaji:"gogo", meaning:"PM / afternoon" },
+  { kanji:"白", hiragana:"しろ", romaji:"shiro", meaning:"white" },
+  { kanji:"本", hiragana:"ほん", romaji:"hon", meaning:"book" },
+  { kanji:"日本", hiragana:"にほん", romaji:"nihon", meaning:"Japan" },
+  { kanji:"山本", hiragana:"やまもと", romaji:"yamamoto", meaning:"Yamamoto (surname)" },
+  { kanji:"子供", hiragana:"こども", romaji:"kodomo", meaning:"child" },
+  { kanji:"子供たち", hiragana:"こどもたち", romaji:"kodomotachi", meaning:"children" },
+  { kanji:"女の子", hiragana:"おんなのこ", romaji:"onna no ko", meaning:"girl" },
+  { kanji:"男", hiragana:"おとこ", romaji:"otoko", meaning:"man" },
+  { kanji:"男の子", hiragana:"おとこのこ", romaji:"otoko no ko", meaning:"boy" },
+  { kanji:"女", hiragana:"おんな", romaji:"onna", meaning:"woman" },
+  { kanji:"お父さん", hiragana:"おとうさん", romaji:"otousan", meaning:"father" },
+  { kanji:"母", hiragana:"はは", romaji:"haha", meaning:"mother" },
+  { kanji:"お母さん", hiragana:"おかあさん", romaji:"okaasan", meaning:"mother (polite)" },
+  { kanji:"友達", hiragana:"ともだち", romaji:"tomodachi", meaning:"friend" },
+  { kanji:"先に", hiragana:"さきに", romaji:"saki ni", meaning:"before / ahead" },
+  { kanji:"先生", hiragana:"せんせい", romaji:"sensei", meaning:"teacher" }
+];
+
+/* ---------- SET 2 ---------- */
+/* data you provided previously (time, students, transport, etc.) */
+const set2 = [
+  { kanji:"生まれます", hiragana:"うまれます", romaji:"umaremasu", meaning:"to be born" },
+  { kanji:"先生", hiragana:"せんせい", romaji:"sensei", meaning:"teacher" },
+  { kanji:"学生", hiragana:"がくせい", romaji:"gakusei", meaning:"student" },
+  { kanji:"小学生", hiragana:"しょうがくせい", romaji:"shou gakusei", meaning:"elementary school student" },
+  { kanji:"中学生", hiragana:"ちゅうがくせい", romaji:"chuu gakusei", meaning:"middle school student" },
+  { kanji:"大学", hiragana:"だいがく", romaji:"daigaku", meaning:"university" },
+  { kanji:"大学生", hiragana:"だいがくせい", romaji:"daigakusei", meaning:"university student" },
+  { kanji:"学校", hiragana:"がっこう", romaji:"gakkou", meaning:"school" },
+  { kanji:"小学校", hiragana:"しょうがっこう", romaji:"shou gakkou", meaning:"elementary school" },
+  { kanji:"中学校", hiragana:"ちゅうがっこう", romaji:"chuu gakkou", meaning:"middle school" },
+  { kanji:"貴方", hiragana:"なた", romaji:"nata (maybe anata)", meaning:"(possibly: anata) you" },
+  { kanji:"何", hiragana:"なん", romaji:"nan", meaning:"what" },
+  { kanji:"何", hiragana:"なに", romaji:"nani", meaning:"what" },
+  { kanji:"何 + counter", hiragana:"なん + [counter]", romaji:"nan + counter", meaning:"what (e.g., 何人, 何時)" },
+  { kanji:"時", hiragana:"とき", romaji:"toki", meaning:"time; when" },
+  { kanji:"時々", hiragana:"ときどき", romaji:"tokidoki", meaning:"sometimes" },
+  { kanji:"一時", hiragana:"いちじ", romaji:"ichiji", meaning:"one o'clock" },
+  { kanji:"時計", hiragana:"とけい", romaji:"tokei", meaning:"clock / watch" },
+  { kanji:"間", hiragana:"あいだ", romaji:"aida", meaning:"between" },
+  { kanji:"時間", hiragana:"じかん", romaji:"jikan", meaning:"time / hours" },
+  { kanji:"二時間", hiragana:"にじかん", romaji:"nijikan", meaning:"two hours" },
+  { kanji:"五分", hiragana:"ごふん", romaji:"gofun", meaning:"five minutes" },
+  { kanji:"十分", hiragana:"じゅっぷん", romaji:"juppun", meaning:"ten minutes" },
+  { kanji:"八時半", hiragana:"はちじはん", romaji:"hachiji han", meaning:"8:30" },
+  { kanji:"半分", hiragana:"はんぶん", romaji:"hanbun", meaning:"half" },
+  { kanji:"毎日", hiragana:"まいにち", romaji:"mainichi", meaning:"every day" },
+  { kanji:"毎月", hiragana:"まいつき", romaji:"maitsuki", meaning:"every month" },
+  { kanji:"年", hiragana:"とし", romaji:"toshi", meaning:"year" },
+  { kanji:"今年", hiragana:"ことし", romaji:"kotoshi", meaning:"this year" },
+  { kanji:"毎年", hiragana:"まいとし/まいねん", romaji:"maitoshi/mainen", meaning:"every year" },
+  { kanji:"2003年", hiragana:"2003ねん", romaji:"2003 nen", meaning:"year 2003" },
+  { kanji:"来年", hiragana:"らいねん", romaji:"rainen", meaning:"next year" },
+  { kanji:"三年間", hiragana:"さんねん(かん)", romaji:"sannen(kan)", meaning:"three years (duration)" },
+  { kanji:"前", hiragana:"まえ", romaji:"mae", meaning:"before; in front" },
+  { kanji:"午前", hiragana:"ごぜん", romaji:"gozen", meaning:"AM" },
+  { kanji:"ご飯", hiragana:"ごはん", romaji:"gohan", meaning:"meal / cooked rice" },
+  { kanji:"後ろ", hiragana:"うしろ", romaji:"ushiro", meaning:"behind" },
+  { kanji:"後", hiragana:"あと", romaji:"ato", meaning:"after; later" },
+  { kanji:"午後", hiragana:"ごご", romaji:"gogo", meaning:"PM" },
+  { kanji:"名前", hiragana:"なまえ", romaji:"namae", meaning:"name" },
+  { kanji:"夏休み", hiragana:"なつやすみ", romaji:"natsuyasumi", meaning:"summer vacation" },
+  { kanji:"車", hiragana:"くるま", romaji:"kuruma", meaning:"car" },
+  { kanji:"電車", hiragana:"でんしゃ", romaji:"densha", meaning:"train" },
+  { kanji:"駅", hiragana:"えき", romaji:"eki", meaning:"station" },
+  { kanji:"電気", hiragana:"でんき", romaji:"denki", meaning:"electricity / light" },
+  { kanji:"話します", hiragana:"はなします", romaji:"hanashimasu", meaning:"to speak" },
+  { kanji:"話", hiragana:"はなし", romaji:"hanashi", meaning:"talk / story" },
+  { kanji:"電話", hiragana:"でんわ", romaji:"denwa", meaning:"telephone" }
+];
+
+/* ---------- SET 3 ---------- */
+/* hiragana + romaji : kanji (some have no explicit english meaning provided) */
+const set3 = [
+  { kanji:"私", hiragana:"わたし", romaji:"watashi", meaning:"" },
+  { kanji:"家", hiragana:"いえ", romaji:"ie", meaning:"" },
+  { kanji:"家族", hiragana:"かぞく", romaji:"kazoku", meaning:"" },
+  { kanji:"会います", hiragana:"あいます", romaji:"aimasu", meaning:"" },
+  { kanji:"会社", hiragana:"かいしゃ", romaji:"kaisha", meaning:"" },
+  { kanji:"店", hiragana:"みせ", romaji:"mise", meaning:"" },
+  { kanji:"飲みます", hiragana:"のみます", romaji:"nomimasu", meaning:"" },
+  { kanji:"多い", hiragana:"おおい", romaji:"ooi", meaning:"" },
+  { kanji:"少し", hiragana:"すこし", romaji:"sukoshi", meaning:"" },
+  { kanji:"少ない", hiragana:"すくない", romaji:"sukunai", meaning:"" },
+  { kanji:"少々", hiragana:"しょうしょう", romaji:"shoushou", meaning:"" },
+  { kanji:"古い", hiragana:"ふるい", romaji:"furui", meaning:"" },
+  { kanji:"古本", hiragana:"ふるほん", romaji:"furuhon", meaning:"" },
+  { kanji:"新しい", hiragana:"あたらしい", romaji:"atarashii", meaning:"" },
+  { kanji:"新聞", hiragana:"しんぶん", romaji:"shinbun", meaning:"" },
+  { kanji:"広い", hiragana:"ひろい", romaji:"hiroi", meaning:"" },
+  { kanji:"安い", hiragana:"やすい", romaji:"yasui", meaning:"" },
+  { kanji:"安心します", hiragana:"あんしんします", romaji:"anshin shimasu", meaning:"" },
+  { kanji:"立ちます", hiragana:"たちます", romaji:"tachimasu", meaning:"" },
+  { kanji:"知ります", hiragana:"しります", romaji:"shirimasu", meaning:"" },
+  { kanji:"言います", hiragana:"いいます", romaji:"iimasu", meaning:"" },
+  { kanji:"言葉", hiragana:"ことば", romaji:"kotoba", meaning:"" },
+  { kanji:"伝言", hiragana:"でんごん", romaji:"dengon", meaning:"" },
+  { kanji:"思います", hiragana:"おもいます", romaji:"omoimasu", meaning:"" },
+  { kanji:"思い出します", hiragana:"おもいだします", romaji:"omoidashimasu", meaning:"" },
+  { kanji:"歩きます", hiragana:"あるきます", romaji:"arukimasu", meaning:"" },
+  { kanji:"散歩します", hiragana:"さんぽします", romaji:"sanpo shimasu", meaning:"" },
+  { kanji:"走ります", hiragana:"はしります", romaji:"hashirimasu", meaning:"" },
+  { kanji:"泳ぎます", hiragana:"およぎます", romaji:"oyogimasu", meaning:"" },
+  { kanji:"住所", hiragana:"じゅうしょ", romaji:"juusho", meaning:"" },
+  { kanji:"空", hiragana:"そら", romaji:"sora", meaning:"" },
+  { kanji:"起きます", hiragana:"おきます", romaji:"okimasu", meaning:"" },
+  { kanji:"空気", hiragana:"くうき", romaji:"kuuki", meaning:"" },
+  { kanji:"空港", hiragana:"くうこう", romaji:"kuukou", meaning:"" },
+  { kanji:"知り合う", hiragana:"しりあう", romaji:"shiriau", meaning:"" },
+  { kanji:"地上", hiragana:"ちじょう", romaji:"chijou", meaning:"" },
+  { kanji:"認識します", hiragana:"にんしきします", romaji:"ninshiki shimasu", meaning:"" },
+  { kanji:"日常", hiragana:"にちじょう", romaji:"nichijou", meaning:"" },
+  { kanji:"日用品", hiragana:"にちようひん", romaji:"nichiyouhin", meaning:"" },
+  { kanji:"魚", hiragana:"さかな", romaji:"sakana", meaning:"" },
+  { kanji:"魚屋", hiragana:"さかなや", romaji:"sakanaya", meaning:"" },
+  { kanji:"耳", hiragana:"みみ", romaji:"mimi", meaning:"" },
+  { kanji:"銀", hiragana:"ぎん", romaji:"gin", meaning:"" },
+  { kanji:"銀行", hiragana:"ぎんこう", romaji:"ginkou", meaning:"" },
+  { kanji:"道", hiragana:"みち", romaji:"michi", meaning:"" },
+  { kanji:"水道", hiragana:"すいどう", romaji:"suidou", meaning:"" },
+  { kanji:"雨季", hiragana:"うき", romaji:"uki", meaning:"" },
+  { kanji:"道具", hiragana:"どうぐ", romaji:"dougu", meaning:"" },
+  { kanji:"作ります", hiragana:"つくります", romaji:"tsukurimasu", meaning:"" },
+  { kanji:"作文", hiragana:"さくぶん", romaji:"sakubun", meaning:"" },
+  { kanji:"使います", hiragana:"つかいます", romaji:"tsukaimasu", meaning:"" },
+  { kanji:"大使館", hiragana:"たいしかん", romaji:"taishikan", meaning:"" },
+  { kanji:"待ちます", hiragana:"まちます", romaji:"machimasu", meaning:"" },
+  { kanji:"近い", hiragana:"ちかい", romaji:"chikai", meaning:"" },
+  { kanji:"乗り換え", hiragana:"のりかえ", romaji:"norikae", meaning:"" },
+  { kanji:"不便", hiragana:"ふべん", romaji:"fuben", meaning:"" },
+  { kanji:"心", hiragana:"こころ", romaji:"kokoro", meaning:"" },
+  { kanji:"心配します", hiragana:"しんぱいします", romaji:"shinpai shimasu", meaning:"" },
+  { kanji:"安心します", hiragana:"あんしんします", romaji:"anshin shimasu", meaning:"" },
+  { kanji:"発信/発進 (maybe)", hiragana:"わっしん", romaji:"wasshin/hasshin", meaning:"(unclear)" }
+];
+
+/* ---------------------------
+   Utility functions
+   --------------------------- */
+
+function shuffleArray(a){
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+}
+
+/* App State */
+let activeSet = "set1";
+let deck = [];
+let index = 0;
+let revealStage = 0; // 0 = only kanji (front), 1 = show hiragana, 2 = show meaning, 3 = show romaji
+const overlay = document.getElementById('overlay');
+const overlayText = document.getElementById('overlayText');
+
+/* DOM */
+const setSelect = document.getElementById('setSelect');
+const kanjiField = document.getElementById('kanjiField');
+const hiraganaField = document.getElementById('hiraganaField');
+const meaningField = document.getElementById('meaningField');
+const romajiField = document.getElementById('romajiField');
+const cardTitle = document.getElementById('cardTitle');
+const statusText = document.getElementById('statusText');
+
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const revealBtn = document.getElementById('revealBtn');
+const showKanjiBtn = document.getElementById('showKanjiBtn');
+const restartBtn = document.getElementById('restartBtn');
+
+/* Initialize */
+function loadSet(name){
+  activeSet = name;
+  if(name === "set1") deck = JSON.parse(JSON.stringify(set1));
+  else if(name === "set2") deck = JSON.parse(JSON.stringify(set2));
+  else deck = JSON.parse(JSON.stringify(set3));
+
+  shuffleArray(deck);
+  index = 0;
+  revealStage = 0;
+  updateUI();
+}
+
+function updateUI(){
+  if(deck.length === 0){
+    kanjiField.textContent = "";
+    hiraganaField.style.display = "none";
+    meaningField.style.display = "none";
+    romajiField.style.display = "none";
+    statusText.textContent = "No cards in this set.";
+    return;
+  }
+  const card = deck[index];
+  // set kanji always visible
+  kanjiField.textContent = card.kanji || card.hiragana || "—";
+  // hide other reveals by default
+  hiraganaField.style.display = "none";
+  meaningField.style.display = "none";
+  romajiField.style.display = "none";
+
+  cardTitle.textContent = "Kanji";
+  statusText.textContent = `Card ${index+1} / ${deck.length}`;
+
+  // If reveal stage already progressed (e.g., after next/back), show appropriate items
+  if(revealStage >= 1){
+    hiraganaField.style.display = "";
+    hiraganaField.textContent = card.hiragana || "—";
+  }
+  if(revealStage >= 2){
+    meaningField.style.display = "";
+    meaningField.textContent = card.meaning && card.meaning.trim() !== "" ? card.meaning : `Kanji: ${card.kanji || "—"}`;
+  }
+  if(revealStage >= 3){
+    romajiField.style.display = "";
+    romajiField.textContent = card.romaji || "—";
+  }
+}
+
+function revealNext(){
+  if(deck.length === 0) return;
+  if(revealStage < 3){
+    revealStage++;
+    // update title to reflect the reveal stage
+    if(revealStage === 1) cardTitle.textContent = "Hiragana";
+    else if(revealStage === 2) cardTitle.textContent = "Meaning";
+    else if(revealStage === 3) cardTitle.textContent = "Romaji";
+    updateUI();
+  } else {
+    // already fully revealed; do nothing or optionally move next
+  }
+}
+
+function showKanji(){
+  revealStage = 0;
+  cardTitle.textContent = "Kanji";
+  updateUI();
+}
+
+/* navigation */
+function nextCard(skipShuffleAtEnd=false){
+  if(deck.length === 0) return;
+  index++;
+  if(index >= deck.length){
+    // end of list
+    // show overlay, then reshuffle and restart after 2s
+    overlayText.textContent = "End of list! Shuffling again...";
+    overlay.style.display = "";
+    setTimeout(()=>{
+      overlay.style.display = "none";
+      shuffleArray(deck);
+      index = 0;
+      revealStage = 0;
+      updateUI();
+    }, 2000);
+  } else {
+    revealStage = 0;
+    updateUI();
+  }
+}
+
+function prevCard(){
+  if(deck.length === 0) return;
+  index--;
+  if(index < 0) index = deck.length - 1;
+  revealStage = 0;
+  updateUI();
+}
+
+function restartDeck(){
+  if(deck.length === 0) return;
+  shuffleArray(deck);
+  index = 0;
+  revealStage = 0;
+  updateUI();
+}
+
+/* events */
+setSelect.addEventListener('change', ()=>{ loadSet(setSelect.value); });
+revealBtn.addEventListener('click', revealNext);
+showKanjiBtn.addEventListener('click', showKanji);
+nextBtn.addEventListener('click', ()=> nextCard());
+prevBtn.addEventListener('click', prevCard);
+restartBtn.addEventListener('click', restartDeck);
+
+/* keyboard shortcuts */
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowRight') nextCard();
+  else if(e.key === 'ArrowLeft') prevCard();
+  else if(e.key.toLowerCase() === 'r') restartDeck();
+  else if(e.key === ' ') { e.preventDefault(); revealNext(); }
+});
+
+/* Start with set1 */
+loadSet('set1');
+
+/* Responsive trick: ensure reveal fields wrap nicely by adjusting sizes in CSS; nothing else needed */
+</script>
+</body>
+</html>
